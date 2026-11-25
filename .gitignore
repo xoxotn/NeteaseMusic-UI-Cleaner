@@ -1,0 +1,9 @@
+# Temporary installers & OS artifacts
+*.msi
+*.msixbundle
+*.wsl
+.theos/
+packages/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,48 @@
+name: Build UICleaner (.dylib & Rootless .deb)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Theos & ldid on macOS runner
+        run: |
+          brew install ldid xz
+          export THEOS=$HOME/theos
+          git clone --recursive https://github.com/theos/theos.git "$THEOS"
+          mkdir -p "$THEOS/sdks"
+          curl -fL --retry 3 https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz | tar -xJf - -C "$THEOS/sdks/"
+
+      - name: Compile Dual-Target Release Artifacts
+        run: |
+          export THEOS=$HOME/theos
+          export THEOS_PACKAGE_SCHEME=rootless
+          export PATH="$THEOS/bin:$PATH"
+          cd ui-cleaner-template
+          sed -i '' '/THEOS_DEVICE_IP/d' Makefile
+          sed -i '' '/THEOS_DEVICE_PORT/d' Makefile
+          make clean
+          make package FINALPACKAGE=1
+          install_name_tool \
+            -delete_rpath /var/jb/Library/Frameworks \
+            -delete_rpath /var/jb/usr/lib \
+            -delete_rpath @loader_path/.jbroot/Library/Frameworks \
+            -delete_rpath @loader_path/.jbroot/usr/lib \
+            ./dist/UICleaner.dylib 2>/dev/null || true
+          ldid -S ./dist/UICleaner.dylib
+          ls -lh ./dist/
+
+      - name: Upload Compiled UICleaner.dylib & .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: UICleaner-Dual-Artifacts
+          path: |
+            ui-cleaner-template/dist/UICleaner.dylib
+            ui-cleaner-template/dist/*.deb
